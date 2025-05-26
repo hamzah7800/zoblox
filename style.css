@@ -1,0 +1,33 @@
+html, body {
+  margin: 0;
+  overflow: hidden;
+  height: 100%;
+}
+#renderCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#joystick-container {
+  position: absolute;
+  bottom: 50px;
+  left: 50px;
+  width: 100px;
+  height: 100px;
+}
+#joystick-base {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  position: relative;
+}
+#joystick-stick {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  position: absolute;
+  top: 25px;
+  left: 25px;
+}
