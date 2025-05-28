@@ -7,9 +7,9 @@ canvas.style.top = "0";
 canvas.style.left = "0";
 const engine = new BABYLON.Engine(canvas, true);
 
-const socket = new WebSocket("wss://yourserver.com"); // Replace with your server URL
-
+const socket = new WebSocket("ws://localhost:3000");
 const players = {}; // Store other players
+let myId = null;
 
 const createScene = () => {
   const scene = new BABYLON.Scene(engine);
@@ -35,8 +35,10 @@ const createScene = () => {
     AR: BABYLON.MeshBuilder.CreateBox("ar", { width: 1, height: 0.3, depth: 2 }, scene),
     pistol: BABYLON.MeshBuilder.CreateBox("pistol", { width: 0.5, height: 0.2, depth: 1 }, scene)
   };
-  weapons.AR.position.set(0.5, 1, 1);
-  weapons.pistol.position.set(0.5, 1, 1);
+  weapons.AR.parent = camera;
+  weapons.pistol.parent = camera;
+  weapons.AR.position.set(0.5, -0.5, 1);
+  weapons.pistol.position.set(0.5, -0.5, 1);
   weapons.pistol.setEnabled(false);
 
   let currentWeapon = "AR";
@@ -44,8 +46,20 @@ const createScene = () => {
   const maxAmmo = 30;
 
   document.getElementById("ammoDisplay").textContent = `Ammo: ${ammo}`;
-
   const shootSound = new BABYLON.Sound("shoot", "sounds/shoot.wav", scene);
+
+  const inputMap = {};
+  scene.actionManager = new BABYLON.ActionManager(scene);
+  scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, evt => inputMap[evt.sourceEvent.key] = true));
+  scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, evt => inputMap[evt.sourceEvent.key] = false));
+
+  scene.onBeforeRenderObservable.add(() => {
+    const speed = 0.2;
+    if (inputMap["w"]) player.position.z += speed;
+    if (inputMap["s"]) player.position.z -= speed;
+    if (inputMap["a"]) player.position.x -= speed;
+    if (inputMap["d"]) player.position.x += speed;
+  });
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "1") {
@@ -77,9 +91,10 @@ const createScene = () => {
     const direction = camera.getForwardRay().direction;
     const velocity = direction.scale(2);
 
+    const disposeTimeout = setTimeout(() => bullet.dispose(), 3000);
+
     scene.registerBeforeRender(() => {
       bullet.position.addInPlace(velocity);
-      if (bullet.position.length() > 100) bullet.dispose();
     });
   };
 
@@ -87,6 +102,7 @@ const createScene = () => {
   const updateHealth = (amount) => {
     health = Math.max(0, Math.min(100, health + amount));
     document.getElementById("healthBar").style.width = `${health}%`;
+    document.getElementById("healthText").textContent = `${health}%`;
   };
 
   const team = Math.random() > 0.5 ? "Alliance" : "The Force";
@@ -94,7 +110,9 @@ const createScene = () => {
 
   socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    if (data.type === "player") {
+    if (data.type === "init") {
+      myId = data.id;
+    } else if (data.type === "player") {
       if (!players[data.id]) {
         const remote = BABYLON.MeshBuilder.CreateBox("remotePlayer", { height: 2, width: 1, depth: 1 }, scene);
         remote.material = playerMat;
@@ -102,18 +120,20 @@ const createScene = () => {
       }
       players[data.id].position = new BABYLON.Vector3(data.x, data.y, data.z);
     } else if (data.type === "shoot") {
-      // Optional: show incoming bullet trail from other player
+      // TODO: render other player's bullet if needed
     }
   };
 
   scene.registerBeforeRender(() => {
-    socket.send(JSON.stringify({
-      type: "player",
-      id: socket.id,
-      x: player.position.x,
-      y: player.position.y,
-      z: player.position.z
-    }));
+    if (myId) {
+      socket.send(JSON.stringify({
+        type: "player",
+        id: myId,
+        x: player.position.x,
+        y: player.position.y,
+        z: player.position.z
+      }));
+    }
   });
 
   return scene;
@@ -121,5 +141,4 @@ const createScene = () => {
 
 const scene = createScene();
 engine.runRenderLoop(() => scene.render());
-
 window.addEventListener("resize", () => engine.resize());
