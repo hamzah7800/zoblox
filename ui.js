@@ -1,6 +1,15 @@
 // game.js
 const canvas = document.getElementById("renderCanvas");
+canvas.style.width = "100vw";
+canvas.style.height = "100vh";
+canvas.style.position = "absolute";
+canvas.style.top = "0";
+canvas.style.left = "0";
 const engine = new BABYLON.Engine(canvas, true);
+
+const socket = new WebSocket("wss://yourserver.com"); // Replace with your server URL
+
+const players = {}; // Store other players
 
 const createScene = () => {
   const scene = new BABYLON.Scene(engine);
@@ -54,6 +63,7 @@ const createScene = () => {
       shootSound.play();
       ammo--;
       document.getElementById("ammoDisplay").textContent = `Ammo: ${ammo}`;
+      socket.send(JSON.stringify({ type: "shoot", from: player.position }));
     }
     if (e.key === "r") {
       ammo = maxAmmo;
@@ -66,8 +76,6 @@ const createScene = () => {
     bullet.position = camera.position.clone();
     const direction = camera.getForwardRay().direction;
     const velocity = direction.scale(2);
-
-    bullet.actionManager = new BABYLON.ActionManager(scene);
 
     scene.registerBeforeRender(() => {
       bullet.position.addInPlace(velocity);
@@ -83,6 +91,30 @@ const createScene = () => {
 
   const team = Math.random() > 0.5 ? "Alliance" : "The Force";
   document.getElementById("teamIndicator").innerText = `Team: ${team}`;
+
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "player") {
+      if (!players[data.id]) {
+        const remote = BABYLON.MeshBuilder.CreateBox("remotePlayer", { height: 2, width: 1, depth: 1 }, scene);
+        remote.material = playerMat;
+        players[data.id] = remote;
+      }
+      players[data.id].position = new BABYLON.Vector3(data.x, data.y, data.z);
+    } else if (data.type === "shoot") {
+      // Optional: show incoming bullet trail from other player
+    }
+  };
+
+  scene.registerBeforeRender(() => {
+    socket.send(JSON.stringify({
+      type: "player",
+      id: socket.id,
+      x: player.position.x,
+      y: player.position.y,
+      z: player.position.z
+    }));
+  });
 
   return scene;
 };
