@@ -1,5 +1,15 @@
+// game.js
 const canvas = document.getElementById("renderCanvas");
+canvas.style.width = "100vw";
+canvas.style.height = "100vh";
+canvas.style.position = "absolute";
+canvas.style.top = "0";
+canvas.style.left = "0";
 const engine = new BABYLON.Engine(canvas, true);
+
+const socket = new WebSocket("wss://yourserver.com"); // Replace with your server URL
+
+const players = {}; // Store other players
 
 const createScene = () => {
   const scene = new BABYLON.Scene(engine);
@@ -30,6 +40,12 @@ const createScene = () => {
   weapons.pistol.setEnabled(false);
 
   let currentWeapon = "AR";
+  let ammo = 30;
+  const maxAmmo = 30;
+
+  document.getElementById("ammoDisplay").textContent = `Ammo: ${ammo}`;
+
+  const shootSound = new BABYLON.Sound("shoot", "sounds/shoot.wav", scene);
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "1") {
@@ -42,7 +58,30 @@ const createScene = () => {
       weapons.pistol.setEnabled(true);
       currentWeapon = "pistol";
     }
+    if (e.key === "f" && ammo > 0) {
+      shootBullet();
+      shootSound.play();
+      ammo--;
+      document.getElementById("ammoDisplay").textContent = `Ammo: ${ammo}`;
+      socket.send(JSON.stringify({ type: "shoot", from: player.position }));
+    }
+    if (e.key === "r") {
+      ammo = maxAmmo;
+      document.getElementById("ammoDisplay").textContent = `Ammo: ${ammo}`;
+    }
   });
+
+  const shootBullet = () => {
+    const bullet = BABYLON.MeshBuilder.CreateSphere("bullet", { diameter: 0.2 }, scene);
+    bullet.position = camera.position.clone();
+    const direction = camera.getForwardRay().direction;
+    const velocity = direction.scale(2);
+
+    scene.registerBeforeRender(() => {
+      bullet.position.addInPlace(velocity);
+      if (bullet.position.length() > 100) bullet.dispose();
+    });
+  };
 
   let health = 100;
   const updateHealth = (amount) => {
@@ -52,6 +91,30 @@ const createScene = () => {
 
   const team = Math.random() > 0.5 ? "Alliance" : "The Force";
   document.getElementById("teamIndicator").innerText = `Team: ${team}`;
+
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "player") {
+      if (!players[data.id]) {
+        const remote = BABYLON.MeshBuilder.CreateBox("remotePlayer", { height: 2, width: 1, depth: 1 }, scene);
+        remote.material = playerMat;
+        players[data.id] = remote;
+      }
+      players[data.id].position = new BABYLON.Vector3(data.x, data.y, data.z);
+    } else if (data.type === "shoot") {
+      // Optional: show incoming bullet trail from other player
+    }
+  };
+
+  scene.registerBeforeRender(() => {
+    socket.send(JSON.stringify({
+      type: "player",
+      id: socket.id,
+      x: player.position.x,
+      y: player.position.y,
+      z: player.position.z
+    }));
+  });
 
   return scene;
 };
