@@ -7,7 +7,7 @@ canvas.style.top = "0";
 canvas.style.left = "0";
 const engine = new BABYLON.Engine(canvas, true);
 
-const socket = new WebSocket("ws://localhost:3000");
+const socket = new WebSocket("wss://yourserver.com"); // Replace with your server URL
 const players = {}; // Store other players
 let myId = null;
 
